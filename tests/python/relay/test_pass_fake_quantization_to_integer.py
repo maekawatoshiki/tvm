@@ -1115,15 +1115,17 @@ def test_fake_quantize_take():
 
 
 def test_fake_quantize_softmax():
-    shape = [50, 10]
+    shape = [3, 2]
     x = relay.var("x", shape=shape, dtype="int8")
 
-    x = relay.qnn.op.dequantize(x, relay.const(0.08), relay.const(-48))
+    x = relay.qnn.op.dequantize(x, relay.const(0.005), relay.const(0))
     op = relay.op.nn.softmax(x, axis=1)
     op = relay.qnn.op.quantize(op, relay.const(0.0039), relay.const(-128), out_dtype="int8")
-    op = relay.qnn.op.dequantize(op, relay.const(0.0039), relay.const(-128))
+    # op = relay.qnn.op.dequantize(op, relay.const(0.0039), relay.const(-128))
 
-    x_np = np.random.randint(-128, 127, size=shape, dtype="int8")
+    x_np = np.random.randint(-100, 100, size=shape, dtype="int8")
+    print(x_np)
+    # x_np = np.random.randint(-10, 101, size=shape, dtype="int8")
     args = [x_np]
 
     mod = tvm.IRModule.from_expr(op)
@@ -1141,6 +1143,11 @@ def test_fake_quantize_softmax():
         .evaluate()(*args)
         .numpy()
     )
+
+    print(f"desired: {result}")
+    print(f"actual: {result_int}")
+
+    np.testing.assert_allclose(result_int, result)
 
     assert np.allclose(result_int, result, atol=0.05)
 

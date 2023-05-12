@@ -94,29 +94,29 @@ Expr QnnSoftmaxCanonicalize(const Attrs& attrs, const Array<Expr>& new_args,
 
   // Refer to the Algorithm 1 in https://arxiv.org/pdf/2207.01405.pdf
 
+  const auto const_i64 = [&](int64_t val) { return MakeConstantScalar(DataType::Int(64), val); };
   const Expr quantized_data =
-      Subtract(Cast(new_args[0], DataType::Int(32)), Cast(input_zero_point, DataType::Int(32)));
+      Subtract(Cast(new_args[0], DataType::Int(64)), Cast(input_zero_point, DataType::Int(64)));
 
-  const Expr x_0 = ConvertDtype(
-      Round(Divide(MakeConstantScalar(DataType::Float(32), 1.f), input_scale)), DataType::Int(32));
+  const Expr x_0 = Cast(
+      Round(Divide(MakeConstantScalar(DataType::Float(32), 1.f), input_scale)), DataType::Int(64));
   const Expr max = Max(quantized_data, {axis}, true, false);
   const Expr x = Subtract(quantized_data, max);
 
-  const auto const_i32 = [&](int32_t val) { return MakeConstantScalar(DataType::Int(32), val); };
-  const int n = 8;
-  const int m = 30;
+  const int n = 30;
+  const int m = 60;
   const int bits = 8;
-  const Expr x_p = Subtract(Add(x, RightShift(x, const_i32(1))), RightShift(x, const_i32(4)));
+  const Expr x_p = Subtract(Add(x, RightShift(x, const_i64(1))), RightShift(x, const_i64(4)));
   const Expr q = Divide(x_p, Negative(x_0));
   const Expr r = Subtract(x_p, Multiply(q, Negative(x_0)));
-  const Expr x_b = Add(RightShift(r, const_i32(1)), x_0);
-  const Expr exps = LeftShift(x_b, Subtract(const_i32(n), q));
+  const Expr x_b = Add(RightShift(r, const_i64(1)), x_0);
+  const Expr exps = LeftShift(x_b, Subtract(const_i64(n), q));
   const Expr sums = Sum(exps, {axis}, true, false);
   const Expr output =
-      RightShift(Multiply(Divide(const_i32(1 << m), sums), exps), const_i32(m - (bits - 1)));
+      RightShift(Multiply(Divide(const_i64(1ll << m), sums), exps), const_i64(m - (bits)));
   const Expr requantized =
-      Requantize(output, arg_types[0].as<TensorTypeNode>()->shape,
-                 MakeConstantScalar(DataType::Float(32), 1.f / (1 << (bits - 1))), const_i32(0),
+      Requantize(Cast(output, DataType::Int(32)), arg_types[0].as<TensorTypeNode>()->shape,
+                 MakeConstantScalar(DataType::Float(32), 1.f / (1 << (bits))), const_i64(0),
                  output_scale, output_zero_point, DataType::Int(bits), 0);
 
   return requantized;
