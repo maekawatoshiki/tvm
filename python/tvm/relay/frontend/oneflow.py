@@ -1025,15 +1025,17 @@ class Dropout(OneFlowOpConverter):
         return out
 
 
-class ThresholdedRelu(OneFlowOpConverter):
-    """Operator converter for ThresholdedRelu."""
+class Threshold(OneFlowOpConverter):
+    """Operator converter for Threshold."""
 
     @classmethod
     def _impl_v1(cls, inputs, attrs, params):
-        alpha = float(attrs.get("alpha", 1.0))
-        alpha_tensor = _op.full_like(inputs[0], fill_value=_expr.const(alpha))
-        mask = _op.greater(inputs[0], alpha_tensor).astype("float32")
-        return inputs[0] * mask
+        threshold = float(attrs.get("threshold_val", 1.0))
+        threshold_tensor = _op.full_like(inputs[0], fill_value=_expr.const(threshold))
+        value = float(attrs.get("value"))
+        value_tensor = _op.full_like(inputs[0], fill_value=_expr.const(value))
+        mask = _op.greater(inputs[0], threshold_tensor)
+        return _op.where(mask, inputs[0], value_tensor)
 
 
 class Elu(OneFlowOpConverter):
@@ -1119,8 +1121,11 @@ class Softplus(OneFlowOpConverter):
     def _impl_v1(cls, inputs, attrs, params):
         data = inputs[0]
         data_dtype = infer_type(data).checked_type.dtype
-        data = _op.exp(data) + _expr.const(1, dtype=data_dtype)
-        return _op.log(data)
+        beta = _expr.const(float(attrs.get("beta", 1.0)))
+        threshold = float(attrs.get("threshold", 20.0))
+        threshold_ = _op.full_like(data, fill_value=_expr.const(threshold))
+        softplus_value = _op.log(_op.exp(data * beta) + _expr.const(1.0, dtype=data_dtype)) / beta
+        return _op.where(_op.greater(data * beta, threshold_), data, softplus_value)
 
 
 class Softsign(OneFlowOpConverter):
@@ -1422,6 +1427,7 @@ def get_convert_map():
         "relu": Renamer("relu"),
         "leaky_relu": Renamer("leaky_relu"),
         "prelu": PReLU.get_converter(),
+        "threshold": Threshold.get_converter(),
         "selu": Selu.get_converter(),
         "silu": Silu.get_converter(),
         "gelu": Gelu.get_converter(),

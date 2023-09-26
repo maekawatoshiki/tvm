@@ -1051,6 +1051,8 @@ class TestPadding:
         # original extent is smaller than the divident
         # it is not surjective wrt to the region [0, 16)
         ({x: 3}, {flm(x, 16)}),
+        # (x % c1) // c2 is not proved as surjective if c1 % c2 != 0
+        ({x: 255}, {fld(flm(x, 255), 16)}),
     )
 
     def test_padding(self, positive_test_case):
@@ -1290,6 +1292,26 @@ def test_normalize_to_iter_sum():
         [(y, 6), (z, 2), (x, 1)],
         0,
     )
+
+
+def test_detect_iter_map_with_bufferload_recursion():
+    n = tvm.tir.Var("n", "int32")
+    m = tvm.tir.Var("m", "int32")
+    divisor = tvm.tir.Var("divisor", "int32")
+
+    i = tvm.tir.Var("i", "int32")
+    j = tvm.tir.Var("j", "int32")
+
+    buffer = tvm.tir.decl_buffer((n,), "int32", name="seqlen")
+
+    indices = [(buffer[i] + j) // divisor]
+    iter_vars = {
+        i: tvm.ir.Range(tvm.tir.const(0, "int32"), n),
+        j: tvm.ir.Range(tvm.tir.const(0, "int32"), m),
+    }
+
+    result = tvm.arith.detect_iter_map(indices, iter_vars)
+    assert len(result.indices) == 0
 
 
 if __name__ == "__main__":
